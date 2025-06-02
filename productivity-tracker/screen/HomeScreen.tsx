@@ -5,6 +5,7 @@
  * Displays the list of tasks, handles adding/editing/completing/deleting tasks,
  * manages modal visibility, and shows task completion stats.
  * All main UI logic for the home/task list screen is centralized here.
+ * This screen is designed to be used as a tab in the bottom tab navigator.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -28,6 +29,7 @@ import { Task, completeTask } from '../utilities/taskHelpers';
 import { loadTasks, saveTask, deleteTask } from '../utilities/storage';
 // Color palette
 import { colors } from '../styles/colors';
+import { Ionicons } from '@expo/vector-icons'; // Add this import for the icon
 
 // =======================
 // Main HomeScreen Component
@@ -196,9 +198,10 @@ const HomeScreen: React.FC = () => {
             <TouchableOpacity
                 style={styles.fab}
                 onPress={handleAddTask}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
+                accessibilityLabel="Add new task"
             >
-                <Text style={styles.fabText}>+</Text>
+                <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
 
             {/* Modal for Adding/Editing Task */}
@@ -270,24 +273,19 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 30,
-        right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: colors.fab,
+        right: 24,
+        bottom: 32,
+        backgroundColor: colors.fab, // keep your purple color
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-    },
-    fabText: {
-        fontSize: 24,
-        fontWeight: '300',
-        color: colors.textPrimary,
+        shadowColor: colors.fab, // purple glow
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+        elevation: 8,
     },
 });
 
