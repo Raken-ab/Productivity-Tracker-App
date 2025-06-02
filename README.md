@@ -1,4 +1,4 @@
-[readme-md.md](https://github.com/user-attachments/files/20556151/readme-md.md)[Uploading read# Productivity & Sobriety Tracker
+# Productivity & Sobriety Tracker
 
 A React Native app built with Expo and TypeScript to help students track daily tasks, build healthy habits, and maintain sobriety streaks.
 
