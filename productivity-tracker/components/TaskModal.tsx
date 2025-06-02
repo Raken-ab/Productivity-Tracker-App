@@ -1,3 +1,12 @@
+/**
+ * TaskModal.tsx
+ * -------------
+ * Modal component for adding or editing a task in the Productivity Tracker app.
+ * Handles form input for task title, description, type, target value, and progress.
+ * Provides Save, Cancel, and Delete (if editing) actions.
+ * Use this component to display a modal for creating or updating a task.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
     Modal,

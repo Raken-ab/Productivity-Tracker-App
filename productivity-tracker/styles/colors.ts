@@ -1,3 +1,11 @@
+/**
+ * colors.ts
+ * ---------
+ * Centralized color palette for the Productivity Tracker app.
+ * Edit this file to change the color scheme for backgrounds, text, task types, status indicators, and UI elements.
+ * All color values used throughout the app are defined here for easy customization.
+ */
+
 export const colors = {
     // Background colors
     background: '#1a1a1a',

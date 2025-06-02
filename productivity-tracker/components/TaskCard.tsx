@@ -1,3 +1,12 @@
+/**
+ * TaskCard.tsx
+ * ------------
+ * Swipeable task card component for the Productivity Tracker app.
+ * Displays task details, progress, streak, and allows swipe-to-complete functionality.
+ * Tapping the card opens the edit modal for the task.
+ * Edit this file to change how each task is displayed or how swipe actions work.
+ */
+
 import React from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -17,6 +26,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
     const progressText = getProgressText(task);
     const streakText = getStreakText(task);
 
+    // Renders the swipe action for completing a task
     const renderRightAction = () => {
         return (
             <Animated.View style={[taskStyles.swipeAction, { backgroundColor: colors.success }]}>
@@ -26,12 +36,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
         );
     };
 
+    // Handles the swipe-to-complete action
     const handleSwipeRight = () => {
         if (!completed) {
             onComplete(task);
         }
     };
 
+    // Returns the style for the task type badge
     const getTypeColor = () => {
         switch (task.type) {
             case 'unit':
@@ -45,6 +57,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
         }
     };
 
+    // Returns the label for the task type badge
     const getTypeLabel = () => {
         switch (task.type) {
             case 'unit':

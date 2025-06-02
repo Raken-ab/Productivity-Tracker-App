@@ -1,3 +1,12 @@
+/**
+ * HomeScreen.tsx
+ * --------------
+ * Main screen for the Productivity Tracker app.
+ * Displays the list of tasks, handles adding/editing/completing/deleting tasks,
+ * manages modal visibility, and shows task completion stats.
+ * All main UI logic for the home/task list screen is centralized here.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
