@@ -1,13 +1,3 @@
-/**
- * HomeScreen.tsx
- * --------------
- * Main screen for the Productivity Tracker app.
- * Displays the list of tasks, handles adding/editing/completing/deleting tasks,
- * manages modal visibility, and shows task completion stats.
- * All main UI logic for the home/task list screen is centralized here.
- * This screen is designed to be used as a tab in the bottom tab navigator.
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
@@ -18,18 +8,14 @@ import {
     SafeAreaView,
     RefreshControl,
     Alert,
+    Platform,
 } from 'react-native';
-// Task card component (swipeable)
 import TaskCard from '../components/TaskCard';
-// Modal for adding/editing tasks
 import TaskModal from '../components/TaskModal';
-// Task logic and types
 import { Task, completeTask } from '../utilities/taskHelpers';
-// AsyncStorage helpers
 import { loadTasks, saveTask, deleteTask } from '../utilities/storage';
-// Color palette
 import { colors } from '../styles/colors';
-import { Ionicons } from '@expo/vector-icons'; // Add this import for the icon
+import { Ionicons } from '@expo/vector-icons';
 
 // =======================
 // Main HomeScreen Component
@@ -135,9 +121,10 @@ const HomeScreen: React.FC = () => {
     // ========== Render Empty State ==========
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
+            <Ionicons name="cloud-outline" size={48} color={colors.fab} style={{ marginBottom: 12, opacity: 0.7 }} />
             <Text style={styles.emptyStateTitle}>No tasks yet</Text>
             <Text style={styles.emptyStateDescription}>
-                Tap the + button to add your first task
+                Tap the <Text style={{ color: colors.fab, fontWeight: 'bold' }}>+</Text> button to add your first task
             </Text>
         </View>
     );
@@ -156,6 +143,8 @@ const HomeScreen: React.FC = () => {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
+                    <View style={styles.glowPurple} />
+                    <Ionicons name="hourglass-outline" size={48} color={colors.fab} style={{ marginBottom: 16, opacity: 0.7 }} />
                     <Text style={styles.loadingText}>Loading tasks...</Text>
                 </View>
             </SafeAreaView>
@@ -165,6 +154,9 @@ const HomeScreen: React.FC = () => {
     // ========== Main Render ==========
     return (
         <SafeAreaView style={styles.container}>
+            {/* Purple glow background effect */}
+            <View style={styles.glowPurple} pointerEvents="none" />
+
             {/* Header with title and stats */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Daily Tasks</Text>
@@ -198,7 +190,7 @@ const HomeScreen: React.FC = () => {
             <TouchableOpacity
                 style={styles.fab}
                 onPress={handleAddTask}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
                 accessibilityLabel="Add new task"
             >
                 <Ionicons name="add" size={32} color="#fff" />
@@ -224,6 +216,21 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
+    glowPurple: {
+        position: 'absolute',
+        top: -100,
+        left: -100,
+        width: 400,
+        height: 400,
+        borderRadius: 200,
+        backgroundColor: colors.fab,
+        opacity: 0.13,
+        zIndex: 0,
+        shadowColor: colors.fab,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.7,
+        shadowRadius: 60,
+    },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -232,23 +239,34 @@ const styles = StyleSheet.create({
     loadingText: {
         fontSize: 16,
         color: colors.textSecondary,
+        letterSpacing: 0.5,
     },
     header: {
-        padding: 20,
+        padding: 24,
         paddingBottom: 16,
+        zIndex: 2,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
         color: colors.textPrimary,
         marginBottom: 4,
+        textShadowColor: colors.fab,
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 14,
+        letterSpacing: 0.5,
     },
     headerStats: {
         fontSize: 16,
         color: colors.textSecondary,
+        textShadowColor: colors.fab,
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 8,
+        letterSpacing: 0.2,
     },
     listContainer: {
-        paddingBottom: 100,
+        paddingBottom: 120,
+        zIndex: 1,
     },
     listContainerEmpty: {
         flex: 1,
@@ -260,32 +278,42 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
     },
     emptyStateTitle: {
-        fontSize: 24,
-        fontWeight: '600',
+        fontSize: 26,
+        fontWeight: '700',
         color: colors.textPrimary,
         marginBottom: 8,
+        textShadowColor: colors.fab,
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 10,
+        letterSpacing: 0.3,
     },
     emptyStateDescription: {
         fontSize: 16,
         color: colors.textSecondary,
         textAlign: 'center',
         lineHeight: 24,
+        textShadowColor: colors.fab,
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 8,
+        letterSpacing: 0.2,
     },
     fab: {
         position: 'absolute',
         right: 24,
         bottom: 32,
-        backgroundColor: colors.fab, // keep your purple color
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        backgroundColor: colors.fab,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.fab, // purple glow
+        shadowColor: colors.fab,
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.5,
-        shadowRadius: 12,
-        elevation: 8,
+        shadowOpacity: 0.6,
+        shadowRadius: 8, // match event button shadow
+        elevation: 10,
+        zIndex: 10,
+        overflow: Platform.OS === 'android' ? 'hidden' : 'visible',
     },
 });
 

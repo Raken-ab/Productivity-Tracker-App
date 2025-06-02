@@ -20,6 +20,7 @@ import {
     ScrollView,
     Alert,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Task, createTask, updateTaskProgress } from '../utilities/taskHelpers';
 import { colors } from '../styles/colors';
 
@@ -43,6 +44,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
     const [type, setType] = useState<'unit' | 'daily' | 'clean'>('daily');
     const [targetValue, setTargetValue] = useState('');
     const [currentValue, setCurrentValue] = useState('');
+    const [completed, setCompleted] = useState(false);
 
     useEffect(() => {
         if (task) {
@@ -51,6 +53,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             setType(task.type);
             setTargetValue(task.targetValue?.toString() || '');
             setCurrentValue(task.currentValue?.toString() || '');
+            setCompleted(!!task.completed);
         } else {
             resetForm();
         }
@@ -62,6 +65,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
         setType('daily');
         setTargetValue('');
         setCurrentValue('');
+        setCompleted(false);
     };
 
     const handleSave = () => {
@@ -86,6 +90,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 type,
                 targetValue: type === 'unit' ? parseInt(targetValue) || 1 : undefined,
                 updatedAt: new Date().toISOString(),
+                completed: (type === 'unit') ? task.completed : completed,
             };
 
             // Update current value if it's a unit task
@@ -100,6 +105,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 description.trim(),
                 type === 'unit' ? parseInt(targetValue) || 1 : undefined
             );
+            // Set initial progress if provided
+            if (type === 'unit' && currentValue.trim()) {
+                savedTask = updateTaskProgress(savedTask, parseInt(currentValue) || 0);
+            }
+            if (type !== 'unit') {
+                savedTask.completed = completed;
+            }
         }
 
         onSave(savedTask);
@@ -130,6 +142,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
         resetForm();
         onCancel();
     };
+
+    // Helper for slider/input sync
+    const maxTarget = parseInt(targetValue) || 100;
+    const currValueNum = parseInt(currentValue) || 0;
 
     return (
         <Modal
@@ -211,6 +227,32 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         </Text>
                     </View>
 
+                    {/* Incomplete/complete toggle for daily/clean tasks */}
+                    {task && (type === 'daily' || type === 'clean') && (
+                        <View style={[styles.formGroup, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.checkbox,
+                                    !completed && styles.checkboxIncomplete
+                                ]}
+                                onPress={() => setCompleted(!completed)}
+                            >
+                                {completed ? (
+                                    <Text style={styles.checkboxText}>✓</Text>
+                                ) : null}
+                            </TouchableOpacity>
+                            <Text style={styles.label}>
+                                {type === 'clean'
+                                    ? completed
+                                        ? <Text style={{ color: '#FF3B30', fontWeight: 'bold' }}>Mark as Relapsed (Undo)</Text>
+                                        : 'Mark as Relapsed'
+                                    : completed
+                                        ? 'Mark as Incomplete'
+                                        : 'Mark as Complete'}
+                            </Text>
+                        </View>
+                    )}
+
                     {type === 'unit' && (
                         <>
                             <View style={styles.formGroup}>
@@ -225,19 +267,36 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                 />
                             </View>
 
-                            {task && (
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Current Progress</Text>
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Current Progress</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <Slider
+                                        style={{ flex: 1 }}
+                                        minimumValue={0}
+                                        maximumValue={maxTarget}
+                                        step={1}
+                                        value={currValueNum}
+                                        minimumTrackTintColor={colors.primary}
+                                        maximumTrackTintColor={colors.border}
+                                        thumbTintColor={colors.primary}
+                                        onValueChange={val => setCurrentValue(val.toString())}
+                                    />
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, { width: 60, marginBottom: 0, textAlign: 'center' }]
+                                        }
                                         value={currentValue}
-                                        onChangeText={setCurrentValue}
-                                        placeholder="Enter current value"
-                                        placeholderTextColor={colors.textMuted}
+                                        onChangeText={text => {
+                                            let num = parseInt(text.replace(/[^0-9]/g, '')) || 0;
+                                            if (num > maxTarget) num = maxTarget;
+                                            setCurrentValue(num.toString());
+                                        }}
                                         keyboardType="numeric"
                                     />
                                 </View>
-                            )}
+                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
+                                    {currentValue} / {targetValue || 1}
+                                </Text>
+                            </View>
                         </>
                     )}
 
@@ -349,6 +408,24 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: colors.textPrimary,
+    },
+    checkbox: {
+        width: 28,
+        height: 28,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkboxIncomplete: {
+        backgroundColor: colors.surface,
+    },
+    checkboxText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 18,
     },
 });
 

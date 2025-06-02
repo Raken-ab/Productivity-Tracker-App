@@ -7,7 +7,7 @@
  * Edit this file to change how each task is displayed or how swipe actions work.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Task, isTaskCompleted, getTaskProgress, getProgressText, getStreakText } from '../utilities/taskHelpers';
@@ -26,21 +26,36 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
     const progressText = getProgressText(task);
     const streakText = getStreakText(task);
 
+    // 1. Create a ref for Swipeable
+    const swipeableRef = useRef<any>(null);
+
+    // 2. Handles the swipe-to-complete action and closes the row
+    const handleSwipeRight = () => {
+        if (!completed) {
+            onComplete(task);
+        }
+        // 3. Close the swipeable row
+        if (swipeableRef.current) {
+            swipeableRef.current.close();
+        }
+    };
+
     // Renders the swipe action for completing a task
     const renderRightAction = () => {
+        if (task.type === 'clean') {
+            return (
+                <Animated.View style={[taskStyles.swipeAction, { backgroundColor: '#FF3B30' }]}>
+                    <Text style={taskStyles.swipeActionText}>✗</Text>
+                    <Text style={taskStyles.swipeActionText}>Relapsed</Text>
+                </Animated.View>
+            );
+        }
         return (
             <Animated.View style={[taskStyles.swipeAction, { backgroundColor: colors.success }]}>
                 <Text style={taskStyles.swipeActionText}>✓</Text>
                 <Text style={taskStyles.swipeActionText}>Complete</Text>
             </Animated.View>
         );
-    };
-
-    // Handles the swipe-to-complete action
-    const handleSwipeRight = () => {
-        if (!completed) {
-            onComplete(task);
-        }
     };
 
     // Returns the style for the task type badge
@@ -73,9 +88,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
 
     return (
         <Swipeable
-            renderLeftActions={completed ? undefined : renderRightAction} // Changed from renderRightActions
-            onSwipeableLeftOpen={handleSwipeRight} // Changed from onSwipeableRightOpen
-            leftThreshold={40} // Changed from rightThreshold
+            ref={swipeableRef} // 4. Attach the ref
+            renderLeftActions={completed ? undefined : renderRightAction}
+            onSwipeableLeftOpen={handleSwipeRight}
+            leftThreshold={0.5}
         >
             <TouchableOpacity
                 style={[taskStyles.taskCard, completed && taskStyles.taskCardCompleted]}
@@ -112,7 +128,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
                         <Text style={taskStyles.streakText}>{streakText}</Text>
                     )}
                     {completed && (
-                        <Text style={taskStyles.completedIndicator}>✓ Completed</Text>
+                        <Text
+                            style={[
+                                taskStyles.completedIndicator,
+                                task.type === 'clean'
+                                    ? { color: '#FF3B30', fontWeight: 'bold' }
+                                    : {}
+                            ]}
+                        >
+                            {task.type === 'clean' ? '✗ Relapsed' : '✓ Completed'}
+                        </Text>
                     )}
                 </View>
             </TouchableOpacity>

@@ -6,7 +6,6 @@ import {
     TouchableOpacity,
     StyleSheet,
     SafeAreaView,
-    Platform,
     ScrollView,
     Modal,
     TextInput,
@@ -14,12 +13,15 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../styles/colors';
 
 // Event type definition
 interface Event {
     id: string;
     title: string;
-    time: string;
+    startTime: string;
+    endTime: string;
+    description: string;
     color: string;
     date: string; // yyyy-mm-dd format to match calendar dates
 }
@@ -28,28 +30,36 @@ const sampleEvents: Event[] = [
     {
         id: '1',
         title: 'Team Meeting',
-        time: '10:00 AM',
+        startTime: '10:00 AM',
+        endTime: '11:00 AM',
+        description: 'Discuss project updates',
         color: '#1E90FF',
         date: '2024-06-12',
     },
     {
         id: '2',
         title: 'Project Deadline',
-        time: 'All Day',
+        startTime: 'All Day',
+        endTime: '',
+        description: 'Final submission of project',
         color: '#FF4500',
         date: '2024-06-15',
     },
     {
         id: '3',
         title: 'Lunch with Sarah',
-        time: '1:00 PM',
+        startTime: '1:00 PM',
+        endTime: '2:00 PM',
+        description: 'Catch up over lunch',
         color: '#32CD32',
         date: '2024-06-12',
     },
     {
         id: '4',
         title: 'Workout',
-        time: '6:00 PM',
+        startTime: '6:00 PM',
+        endTime: '7:00 PM',
+        description: 'Evening gym session',
         color: '#4169E1',
         date: '2024-06-13',
     },
@@ -61,12 +71,9 @@ type CalendarViewMode = 'month' | 'week' | '3day';
 // Helper function to get week days (Sunday to Saturday) for a given date
 function getWeekDays(dateString: string): string[] {
     const date = new Date(dateString);
-    // Get the day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
     const dayOfWeek = date.getDay();
-    // Find the Sunday of the current week
     const sunday = new Date(date);
     sunday.setDate(date.getDate() - dayOfWeek);
-    // Build array of 7 days (yyyy-mm-dd format)
     return Array.from({ length: 7 }, (_, i) => {
         const d = new Date(sunday);
         d.setDate(sunday.getDate() + i);
@@ -83,7 +90,9 @@ const CalenderScreen: React.FC = () => {
     const [newEvent, setNewEvent] = useState<Event>({
         id: '',
         title: '',
-        time: '',
+        startTime: '',
+        endTime: '',
+        description: '',
         color: '#1E90FF',
         date: selectedDate,
     });
@@ -97,13 +106,11 @@ const CalenderScreen: React.FC = () => {
     // Helper function to get three consecutive days (centered on selectedDate)
     function getThreeDays(dateString: string): string[] {
         const date = new Date(dateString);
-        // Get previous day, current day, and next day
-        const days = [-1, 0, 1].map(offset => {
+        return [-1, 0, 1].map(offset => {
             const d = new Date(date);
             d.setDate(date.getDate() + offset);
             return d.toISOString().split('T')[0];
         });
-        return days;
     }
 
     const threeDays = useMemo(() => getThreeDays(selectedDate), [selectedDate]);
@@ -118,7 +125,8 @@ const CalenderScreen: React.FC = () => {
             <View style={[styles.colorDot, { backgroundColor: item.color }]} />
             <View style={styles.eventTextContainer}>
                 <Text style={styles.eventTitle}>{item.title}</Text>
-                <Text style={styles.eventTime}>{item.time}</Text>
+                <Text style={styles.eventTime}>{item.startTime} - {item.endTime}</Text>
+                <Text style={styles.eventDescription}>{item.description}</Text>
             </View>
         </View>
     );
@@ -128,11 +136,11 @@ const CalenderScreen: React.FC = () => {
     };
 
     const handleAddEvent = () => {
-        if (newEvent.title && newEvent.time) {
+        if (newEvent.title && newEvent.startTime && newEvent.endTime) {
             const newEventWithId = { ...newEvent, id: (sampleEvents.length + 1).toString() };
             sampleEvents.push(newEventWithId);
             setModalVisible(false);
-            setNewEvent({ id: '', title: '', time: '', color: '#1E90FF', date: selectedDate });
+            setNewEvent({ id: '', title: '', startTime: '', endTime: '', description: '', color: '#1E90FF', date: selectedDate });
         } else {
             alert('Please fill in all fields');
         }
@@ -165,6 +173,11 @@ const CalenderScreen: React.FC = () => {
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Calendar Heading */}
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>Calender</Text>
+            </View>
+
             {/* View mode toggle buttons */}
             <View style={styles.viewToggleContainer}>
                 {(['month', 'week', '3day'] as CalendarViewMode[]).map((mode) => (
@@ -224,7 +237,6 @@ const CalenderScreen: React.FC = () => {
                             const date = new Date(day);
                             const dayNum = date.getDate();
                             const isSelected = day === selectedDate;
-                            const hasEvents = sampleEvents.some((e) => e.date === day);
                             const eventColors = sampleEvents
                                 .filter((e) => e.date === day)
                                 .map((e) => e.color);
@@ -334,10 +346,31 @@ const CalenderScreen: React.FC = () => {
                         />
                         <TextInput
                             style={styles.input}
-                            placeholder="Event Time"
-                            value={newEvent.time}
-                            onChangeText={(text) => setNewEvent({ ...newEvent, time: text })}
+                            placeholder="Start Time (e.g., 10:00 AM)"
+                            value={newEvent.startTime}
+                            onChangeText={(text) => setNewEvent({ ...newEvent, startTime: text })}
                         />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="End Time (e.g., 11:00 AM)"
+                            value={newEvent.endTime}
+                            onChangeText={(text) => setNewEvent({ ...newEvent, endTime: text })}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Description"
+                            value={newEvent.description}
+                            onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
+                        />
+                        <View style={styles.colorPickerContainer}>
+                            {['#1E90FF', '#FF4500', '#32CD32', '#4169E1'].map(color => (
+                                <TouchableOpacity
+                                    key={color}
+                                    style={[styles.colorPicker, { backgroundColor: color }]}
+                                    onPress={() => setNewEvent({ ...newEvent, color })}
+                                />
+                            ))}
+                        </View>
                         <Button title="Add Event" onPress={handleAddEvent} />
                         <Button title="Cancel" onPress={() => setModalVisible(false)} color="#FF0000" />
                     </View>
@@ -352,11 +385,14 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#121212',
     },
+    calendar: {
+        borderRadius: 12,
+        marginHorizontal: 16,
+        marginVertical: 8,
+        overflow: 'hidden',
+    },
     calendarContainer: {
         paddingBottom: 8,
-    },
-    calendar: {
-        // Month calendar style
     },
     viewToggleContainer: {
         flexDirection: 'row',
@@ -401,7 +437,7 @@ const styles = StyleSheet.create({
     },
     weekDayContainer: {
         alignItems: 'center',
-        paddingHorizontal: 20,
+        paddingHorizontal: 15,
         paddingVertical: 100, // Increased height
         borderRadius: 8,
     },
@@ -442,7 +478,7 @@ const styles = StyleSheet.create({
         marginVertical: 8,
     },
     threeDayContainer: {
-        width: '100%', // Stretch to full width
+        width: '64%', // Stretch to full width
         backgroundColor: '#1a1a1a',
         borderRadius: 14,
         marginRight: 12,
@@ -504,79 +540,120 @@ const styles = StyleSheet.create({
     eventList: {
         paddingBottom: 80, // space for FAB
     },
-    eventItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#222831',
-        padding: 12,
-        borderRadius: 12,
-        marginBottom: 12,
-        shadowColor: '#1E90FF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-        elevation: 4,
-    },
     colorDot: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        marginRight: 14,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginRight: 10,
+        marginTop: 6,
     },
     eventTextContainer: {
         flex: 1,
+        flexDirection: 'column',
+        justifyContent: 'center',
     },
     eventTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#eeeeee',
+        color: '#fff',
+        marginBottom: 2,
     },
     eventTime: {
         fontSize: 14,
         color: '#bbb',
-        marginTop: 3,
+        marginBottom: 2,
+    },
+    eventDescription: {
+        fontSize: 13,
+        color: '#aaa',
+        fontStyle: 'italic',
+        marginBottom: 2,
+    },
+    eventItem: {
+        flexDirection: 'row',
+    },
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: '#222',
+        borderRadius: 16,
+        padding: 24,
+        width: '85%',
+        alignItems: 'stretch',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.7,
+        shadowRadius: 12,
+        elevation: 10,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1E90FF',
+        marginBottom: 16,
+        textAlign: 'center',
     },
     fab: {
         position: 'absolute',
         right: 24,
         bottom: 32,
         backgroundColor: '#1E90FF',
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        justifyContent: 'center',
+        width: 64,           // Match HomeScreen
+        height: 64,          // Match HomeScreen
+        borderRadius: 32,    // Match HomeScreen
         alignItems: 'center',
+        justifyContent: 'center',
         shadowColor: '#1E90FF',
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: 6 }, // Match HomeScreen
         shadowOpacity: 0.6,
         shadowRadius: 8,
         elevation: 10,
-    },
-    modalContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalContent: {
-        width: '80%',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 20,
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 20,
+        zIndex: 10,
+
     },
     input: {
-        width: '100%',
-        borderColor: '#ccc',
+        backgroundColor: '#333',
+        color: '#fff',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 16,
+        marginBottom: 12,
         borderWidth: 1,
-        borderRadius: 5,
-        padding: 10,
-        marginBottom: 10,
+        borderColor: '#444',
+    },
+    colorPickerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    colorPicker: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        marginHorizontal: 4,
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
+    header: {
+        padding: 24,
+        paddingBottom: 16,
+        zIndex: 2,
+    },
+    headerTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginBottom: 4,
+        textShadowColor: '#1E90FF',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 14,
+        letterSpacing: 0.5,
+
     },
 });
 
