@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import TaskCard from '../components/TaskCard';
 import TaskModal from '../components/TaskModal';
-import { Task, completeTask } from '../utilities/taskHelpers';
-import { loadTasks, saveTask, deleteTask } from '../utilities/storage';
+import { Task, completeTask, resetAllTasksForNewDay } from '../utilities/taskHelpers';
+import { loadTasks, saveTask, deleteTask, saveTasks } from '../utilities/storage';
 import { colors } from '../styles/colors';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -45,6 +45,17 @@ const HomeScreen: React.FC = () => {
     useEffect(() => {
         loadTasksData();
     }, [loadTasksData]);
+
+    // ========== TEST: Increment clean streak every 10 seconds ==========
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            const updated = resetAllTasksForNewDay(await loadTasks());
+            setTasks(updated);
+            await saveTasks(updated);
+        }, 2000); // checks every 2 seconds, streak increments every 10s if not relapsed
+
+        return () => clearInterval(interval);
+    }, []);
 
     // ========== Pull-to-Refresh Handler ==========
     const handleRefresh = useCallback(async () => {
@@ -310,7 +321,7 @@ const styles = StyleSheet.create({
         shadowColor: colors.fab,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.6,
-        shadowRadius: 8, // match event button shadow
+        shadowRadius: 8,
         elevation: 10,
         zIndex: 10,
         overflow: Platform.OS === 'android' ? 'hidden' : 'visible',
