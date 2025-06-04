@@ -23,6 +23,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { Task, createTask, updateTaskProgress } from '../utilities/taskHelpers';
 import { colors } from '../styles/colors';
+import { useEvents } from '../utilities/EventContext';
 
 interface TaskModalProps {
     visible: boolean;
