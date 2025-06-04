@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,67 +9,32 @@ import {
     ScrollView,
     Modal,
     TextInput,
-    Button,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../styles/colors';
+import { useEvents, Event } from '../utilities/EventContext';
 
-// Event type definition
-interface Event {
-    id: string;
-    title: string;
-    startTime: string;
-    endTime: string;
-    description: string;
-    color: string;
-    date: string; // yyyy-mm-dd format to match calendar dates
-}
-
-const sampleEvents: Event[] = [
-    {
-        id: '1',
-        title: 'Team Meeting',
-        startTime: '10:00 AM',
-        endTime: '11:00 AM',
-        description: 'Discuss project updates',
-        color: '#1E90FF',
-        date: '2024-06-12',
-    },
-    {
-        id: '2',
-        title: 'Project Deadline',
-        startTime: 'All Day',
-        endTime: '',
-        description: 'Final submission of project',
-        color: '#FF4500',
-        date: '2024-06-15',
-    },
-    {
-        id: '3',
-        title: 'Lunch with Sarah',
-        startTime: '1:00 PM',
-        endTime: '2:00 PM',
-        description: 'Catch up over lunch',
-        color: '#32CD32',
-        date: '2024-06-12',
-    },
-    {
-        id: '4',
-        title: 'Workout',
-        startTime: '6:00 PM',
-        endTime: '7:00 PM',
-        description: 'Evening gym session',
-        color: '#4169E1',
-        date: '2024-06-13',
-    },
-];
-
-// Define CalendarViewMode type
 type CalendarViewMode = 'month' | 'week' | '3day';
 
+const eventColors = ['#1E90FF', '#FF4500', '#32CD32', '#4169E1', '#FF69B4', '#FFA500', '#9370DB', '#20B2AA'];
+
+// Helper function to format date for display
+const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+};
+
 // Helper function to get week days (Sunday to Saturday) for a given date
-function getWeekDays(dateString: string): string[] {
+const getWeekDays = (dateString: string): string[] => {
     const date = new Date(dateString);
     const dayOfWeek = date.getDay();
     const sunday = new Date(date);
@@ -79,82 +44,199 @@ function getWeekDays(dateString: string): string[] {
         d.setDate(sunday.getDate() + i);
         return d.toISOString().split('T')[0];
     });
-}
+};
 
-const CalenderScreen: React.FC = () => {
+// Helper function to get three consecutive days (centered on selectedDate)
+const getThreeDays = (dateString: string): string[] => {
+    const date = new Date(dateString);
+    return [-1, 0, 1].map(offset => {
+        const d = new Date(date);
+        d.setDate(date.getDate() + offset);
+        return d.toISOString().split('T')[0];
+    });
+};
+
+const CalendarScreen: React.FC = () => {
+    const {
+        state,
+        addEvent,
+        updateEvent,
+        deleteEvent,
+        getEventsForDate
+    } = useEvents();
+
     const [selectedDate, setSelectedDate] = useState<string>(
         new Date().toISOString().split('T')[0]
     );
     const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
     const [modalVisible, setModalVisible] = useState(false);
-    const [newEvent, setNewEvent] = useState<Event>({
-        id: '',
+    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+    const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+    const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
+    type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly';
+
+    const [newEvent, setNewEvent] = useState<{
+        title: string;
+        startTime: Date;
+        endTime: Date;
+        description: string;
+        color: string;
+        date: string;
+        isAllDay: boolean;
+        reminder: number;
+        recurrence: RecurrenceType;
+    }>({
         title: '',
-        startTime: '',
-        endTime: '',
+        startTime: new Date(),
+        endTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour later
         description: '',
-        color: '#1E90FF',
+        color: eventColors[0],
         date: selectedDate,
+        isAllDay: false,
+        reminder: 15, // 15 minutes default
+        recurrence: 'none',
     });
 
     const eventsForSelectedDate = useMemo(() =>
-        sampleEvents.filter((event) => event.date === selectedDate)
-        , [selectedDate]);
+        getEventsForDate(selectedDate).sort((a, b) => {
+            if (a.isAllDay && !b.isAllDay) return -1;
+            if (!a.isAllDay && b.isAllDay) return 1;
+            return a.startTime.localeCompare(b.startTime);
+        }),
+        [selectedDate, state.events]
+    );
 
     const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
-
-    // Helper function to get three consecutive days (centered on selectedDate)
-    function getThreeDays(dateString: string): string[] {
-        const date = new Date(dateString);
-        return [-1, 0, 1].map(offset => {
-            const d = new Date(date);
-            d.setDate(date.getDate() + offset);
-            return d.toISOString().split('T')[0];
-        });
-    }
-
     const threeDays = useMemo(() => getThreeDays(selectedDate), [selectedDate]);
 
-    const onDayPress = (day: string) => {
-        setSelectedDate(day);
-        setNewEvent({ ...newEvent, date: day }); // Update new event date
-    };
+    const resetForm = useCallback(() => {
+        setNewEvent({
+            title: '',
+            startTime: new Date(),
+            endTime: new Date(Date.now() + 60 * 60 * 1000),
+            description: '',
+            color: eventColors[0],
+            date: selectedDate,
+            isAllDay: false,
+            reminder: 15,
+            recurrence: 'none',
+        });
+        setEditingEvent(null);
+    }, [selectedDate]);
 
-    const renderEventItem = ({ item }: { item: Event }) => (
-        <View style={styles.eventItem}>
+    const onDayPress = useCallback((day: string) => {
+        setSelectedDate(day);
+        setNewEvent(prev => ({ ...prev, date: day }));
+    }, []);
+
+    const onAddEventPress = useCallback(() => {
+        resetForm();
+        setModalVisible(true);
+    }, [resetForm]);
+
+    const onEditEventPress = useCallback((event: Event) => {
+        setEditingEvent(event);
+        setNewEvent({
+            title: event.title,
+            startTime: new Date(`${event.date}T${event.startTime}`),
+            endTime: new Date(`${event.date}T${event.endTime}`),
+            description: event.description,
+            color: event.color,
+            date: event.date,
+            isAllDay: event.isAllDay,
+            reminder: event.reminder || 15,
+            recurrence: event.recurrence || 'none',
+        });
+        setModalVisible(true);
+    }, []);
+
+    const handleSaveEvent = useCallback(async () => {
+        if (!newEvent.title.trim()) {
+            Alert.alert('Error', 'Please enter an event title');
+            return;
+        }
+
+        try {
+            const eventData = {
+                title: newEvent.title.trim(),
+                startTime: newEvent.isAllDay ? 'All Day' : newEvent.startTime.toTimeString().slice(0, 5),
+                endTime: newEvent.isAllDay ? '' : newEvent.endTime.toTimeString().slice(0, 5),
+                description: newEvent.description.trim(),
+                color: newEvent.color,
+                date: newEvent.date,
+                isAllDay: newEvent.isAllDay,
+                reminder: newEvent.reminder,
+                recurrence: newEvent.recurrence,
+            };
+
+            if (editingEvent) {
+                await updateEvent({ ...editingEvent, ...eventData });
+            } else {
+                await addEvent(eventData);
+            }
+
+            setModalVisible(false);
+            resetForm();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to save event. Please try again.');
+        }
+    }, [newEvent, editingEvent, addEvent, updateEvent, resetForm]);
+
+    const handleDeleteEvent = useCallback((eventId: string, eventTitle: string) => {
+        Alert.alert(
+            'Delete Event',
+            `Are you sure you want to delete "${eventTitle}"?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteEvent(eventId);
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete event. Please try again.');
+                        }
+                    },
+                },
+            ]
+        );
+    }, [deleteEvent]);
+
+    const renderEventItem = useCallback(({ item }: { item: Event }) => (
+        <TouchableOpacity
+            style={styles.eventItem}
+            onPress={() => onEditEventPress(item)}
+            onLongPress={() => handleDeleteEvent(item.id, item.title)}
+        >
             <View style={[styles.colorDot, { backgroundColor: item.color }]} />
             <View style={styles.eventTextContainer}>
                 <Text style={styles.eventTitle}>{item.title}</Text>
-                <Text style={styles.eventTime}>{item.startTime} - {item.endTime}</Text>
-                <Text style={styles.eventDescription}>{item.description}</Text>
+                <Text style={styles.eventTime}>
+                    {item.isAllDay ? 'All Day' : `${item.startTime} - ${item.endTime}`}
+                </Text>
+                {item.description && (
+                    <Text style={styles.eventDescription}>{item.description}</Text>
+                )}
+                {item.recurrence !== 'none' && (
+                    <Text style={styles.recurrenceText}>Repeats {item.recurrence}</Text>
+                )}
             </View>
-        </View>
-    );
-
-    const onAddEventPress = () => {
-        setModalVisible(true);
-    };
-
-    const handleAddEvent = () => {
-        if (newEvent.title && newEvent.startTime && newEvent.endTime) {
-            const newEventWithId = { ...newEvent, id: (sampleEvents.length + 1).toString() };
-            sampleEvents.push(newEventWithId);
-            setModalVisible(false);
-            setNewEvent({ id: '', title: '', startTime: '', endTime: '', description: '', color: '#1E90FF', date: selectedDate });
-        } else {
-            alert('Please fill in all fields');
-        }
-    };
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+        </TouchableOpacity>
+    ), [onEditEventPress, handleDeleteEvent]);
 
     // Prepare marked dates for month view
     const markedDatesMonthView = useMemo(() => {
         const marks: { [date: string]: any } = {};
-        sampleEvents.forEach(event => {
+        state.events.forEach(event => {
             if (!marks[event.date]) {
                 marks[event.date] = { dots: [] };
             }
             marks[event.date].dots.push({ color: event.color });
         });
+
         // Highlight selected date
         if (marks[selectedDate]) {
             marks[selectedDate] = {
@@ -169,13 +251,45 @@ const CalenderScreen: React.FC = () => {
             };
         }
         return marks;
-    }, [selectedDate]);
+    }, [selectedDate, state.events]);
+
+    const onTimeChange = useCallback((event: any, selectedTime?: Date, isStartTime: boolean = true) => {
+        if (isStartTime) {
+            setShowStartTimePicker(false);
+            if (selectedTime) {
+                setNewEvent(prev => ({
+                    ...prev,
+                    startTime: selectedTime,
+                    endTime: prev.endTime < selectedTime ? new Date(selectedTime.getTime() + 60 * 60 * 1000) : prev.endTime
+                }));
+            }
+        } else {
+            setShowEndTimePicker(false);
+            if (selectedTime) {
+                setNewEvent(prev => ({ ...prev, endTime: selectedTime }));
+            }
+        }
+    }, []);
+
+    if (state.loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#1E90FF" />
+                    <Text style={styles.loadingText}>Loading events...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Calendar Heading */}
+            {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Calender</Text>
+                <Text style={styles.headerTitle}>Calendar</Text>
+                <Text style={styles.headerSubtitle}>
+                    {state.events.length} events total
+                </Text>
             </View>
 
             {/* View mode toggle buttons */}
@@ -237,21 +351,31 @@ const CalenderScreen: React.FC = () => {
                             const date = new Date(day);
                             const dayNum = date.getDate();
                             const isSelected = day === selectedDate;
-                            const eventColors = sampleEvents
-                                .filter((e) => e.date === day)
-                                .map((e) => e.color);
+                            const isToday = day === new Date().toISOString().split('T')[0];
+                            const dayEvents = state.events.filter((e) => e.date === day);
+                            const eventColors = dayEvents.map((e) => e.color);
 
                             return (
                                 <TouchableOpacity
                                     key={day}
-                                    style={[styles.weekDayContainer, isSelected && styles.selectedDayContainer]}
+                                    style={[
+                                        styles.weekDayContainer,
+                                        isSelected && styles.selectedDayContainer,
+                                        isToday && !isSelected && styles.todayContainer
+                                    ]}
                                     onPress={() => onDayPress(day)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.weekDayText, isSelected && styles.selectedDayText]}>
+                                    <Text style={[
+                                        styles.weekDayText,
+                                        (isSelected || isToday) && styles.selectedDayText
+                                    ]}>
                                         {date.toLocaleDateString(undefined, { weekday: 'short' })}
                                     </Text>
-                                    <Text style={[styles.weekDayNum, isSelected && styles.selectedDayText]}>
+                                    <Text style={[
+                                        styles.weekDayNum,
+                                        (isSelected || isToday) && styles.selectedDayText
+                                    ]}>
                                         {dayNum}
                                     </Text>
                                     <View style={styles.dotRow}>
@@ -261,6 +385,9 @@ const CalenderScreen: React.FC = () => {
                                                 style={[styles.eventDotSmall, { backgroundColor: color }]}
                                             />
                                         ))}
+                                        {dayEvents.length > 3 && (
+                                            <Text style={styles.moreEventsIndicator}>+{dayEvents.length - 3}</Text>
+                                        )}
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -274,23 +401,38 @@ const CalenderScreen: React.FC = () => {
                             const date = new Date(day);
                             const dayNum = date.getDate();
                             const isSelected = day === selectedDate;
-                            const dayEvents = sampleEvents.filter((e) => e.date === day);
+                            const isToday = day === new Date().toISOString().split('T')[0];
+                            const dayEvents = state.events.filter((e) => e.date === day);
+
                             return (
                                 <TouchableOpacity
                                     key={day}
-                                    style={[styles.threeDayContainer, isSelected && styles.selectedDayContainer]}
+                                    style={[
+                                        styles.threeDayContainer,
+                                        isSelected && styles.selectedDayContainer,
+                                        isToday && !isSelected && styles.todayContainer
+                                    ]}
                                     onPress={() => onDayPress(day)}
                                     activeOpacity={0.8}
                                 >
-                                    <Text style={[styles.threeDayWeekday, isSelected && styles.selectedDayText]}>
+                                    <Text style={[
+                                        styles.threeDayWeekday,
+                                        (isSelected || isToday) && styles.selectedDayText
+                                    ]}>
                                         {date.toLocaleDateString(undefined, { weekday: 'short' })}
                                     </Text>
-                                    <Text style={[styles.threeDayNum, isSelected && styles.selectedDayText]}>
+                                    <Text style={[
+                                        styles.threeDayNum,
+                                        (isSelected || isToday) && styles.selectedDayText
+                                    ]}>
                                         {dayNum}
                                     </Text>
                                     <View style={styles.threeDayEventsPreview}>
                                         {dayEvents.slice(0, 2).map((event) => (
-                                            <View key={event.id} style={[styles.eventColorBar, { backgroundColor: event.color }]} />
+                                            <View
+                                                key={event.id}
+                                                style={[styles.eventColorBar, { backgroundColor: event.color }]}
+                                            />
                                         ))}
                                         {dayEvents.length > 2 && (
                                             <Text style={styles.moreEventsText}>+{dayEvents.length - 2}</Text>
@@ -303,22 +445,29 @@ const CalenderScreen: React.FC = () => {
                 )}
             </View>
 
-            {/* Events list below the calendar */}
+            {/* Events list */}
             <View style={styles.eventsContainer}>
-                <Text style={styles.eventsHeader}>Events for {selectedDate}</Text>
+                <Text style={styles.eventsHeader}>
+                    {formatDate(selectedDate)}
+                </Text>
                 {eventsForSelectedDate.length === 0 ? (
-                    <Text style={styles.noEventsText}>No events for this day.</Text>
+                    <View style={styles.noEventsContainer}>
+                        <Ionicons name="calendar-outline" size={48} color="#666" />
+                        <Text style={styles.noEventsText}>No events for this day</Text>
+                        <Text style={styles.noEventsSubtext}>Tap the + button to add one</Text>
+                    </View>
                 ) : (
                     <FlatList
                         data={eventsForSelectedDate}
                         renderItem={renderEventItem}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={styles.eventList}
+                        showsVerticalScrollIndicator={false}
                     />
                 )}
             </View>
 
-            {/* Floating Action Button (FAB) for adding event */}
+            {/* Floating Action Button */}
             <TouchableOpacity
                 style={styles.fab}
                 onPress={onAddEventPress}
@@ -328,54 +477,217 @@ const CalenderScreen: React.FC = () => {
                 <Ionicons name="add" size={32} color="#ffffff" />
             </TouchableOpacity>
 
-            {/* Modal for adding new event */}
+            {/* Event Modal */}
             <Modal
                 animationType="slide"
                 transparent={true}
                 visible={modalVisible}
-                onRequestClose={() => setModalVisible(false)}
+                onRequestClose={() => {
+                    setModalVisible(false);
+                    resetForm();
+                }}
             >
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Add New Event</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Event Title"
-                            value={newEvent.title}
-                            onChangeText={(text) => setNewEvent({ ...newEvent, title: text })}
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Start Time (e.g., 10:00 AM)"
-                            value={newEvent.startTime}
-                            onChangeText={(text) => setNewEvent({ ...newEvent, startTime: text })}
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="End Time (e.g., 11:00 AM)"
-                            value={newEvent.endTime}
-                            onChangeText={(text) => setNewEvent({ ...newEvent, endTime: text })}
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Description"
-                            value={newEvent.description}
-                            onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
-                        />
-                        <View style={styles.colorPickerContainer}>
-                            {['#1E90FF', '#FF4500', '#32CD32', '#4169E1'].map(color => (
-                                <TouchableOpacity
-                                    key={color}
-                                    style={[styles.colorPicker, { backgroundColor: color }]}
-                                    onPress={() => setNewEvent({ ...newEvent, color })}
-                                />
-                            ))}
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setModalVisible(false);
+                                    resetForm();
+                                }}
+                                style={styles.modalCloseButton}
+                            >
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>
+                                {editingEvent ? 'Edit Event' : 'Add New Event'}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={handleSaveEvent}
+                                style={styles.modalSaveButton}
+                            >
+                                <Text style={styles.modalSaveText}>Save</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Button title="Add Event" onPress={handleAddEvent} />
-                        <Button title="Cancel" onPress={() => setModalVisible(false)} color="#FF0000" />
+
+                        <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Event Title"
+                                placeholderTextColor="#666"
+                                value={newEvent.title}
+                                onChangeText={(text) => setNewEvent({ ...newEvent, title: text })}
+                            />
+
+                            <TouchableOpacity
+                                style={styles.toggleContainer}
+                                onPress={() => setNewEvent({ ...newEvent, isAllDay: !newEvent.isAllDay })}
+                            >
+                                <Text style={styles.toggleLabel}>All Day</Text>
+                                <View style={[styles.toggle, newEvent.isAllDay && styles.toggleActive]}>
+                                    <View style={[styles.toggleThumb, newEvent.isAllDay && styles.toggleThumbActive]} />
+                                </View>
+                            </TouchableOpacity>
+
+                            {!newEvent.isAllDay && (
+                                <View style={styles.timeContainer}>
+                                    <TouchableOpacity
+                                        style={styles.timeButton}
+                                        onPress={() => setShowStartTimePicker(true)}
+                                    >
+                                        <Text style={styles.timeLabel}>Start Time</Text>
+                                        <Text style={styles.timeValue}>
+                                            {newEvent.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={styles.timeButton}
+                                        onPress={() => setShowEndTimePicker(true)}
+                                    >
+                                        <Text style={styles.timeLabel}>End Time</Text>
+                                        <Text style={styles.timeValue}>
+                                            {newEvent.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                placeholder="Description (optional)"
+                                placeholderTextColor="#666"
+                                value={newEvent.description}
+                                onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
+                                multiline
+                                numberOfLines={3}
+                            />
+
+                            <Text style={styles.sectionLabel}>Color</Text>
+                            <View style={styles.colorPickerContainer}>
+                                {eventColors.map(color => (
+                                    <TouchableOpacity
+                                        key={color}
+                                        style={[
+                                            styles.colorPicker,
+                                            { backgroundColor: color },
+                                            newEvent.color === color && styles.selectedColorPicker
+                                        ]}
+                                        onPress={() => setNewEvent({ ...newEvent, color })}
+                                    />
+                                ))}
+                            </View>
+
+                            <Text style={styles.sectionLabel}>Reminder</Text>
+                            <View style={styles.reminderContainer}>
+                                {[5, 15, 30, 60].map(minutes => (
+                                    <TouchableOpacity
+                                        key={minutes}
+                                        style={[
+                                            styles.reminderButton,
+                                            newEvent.reminder === minutes && styles.selectedReminderButton
+                                        ]}
+                                        onPress={() => setNewEvent({ ...newEvent, reminder: minutes })}
+                                    >
+                                        <Text style={[
+                                            styles.reminderText,
+                                            newEvent.reminder === minutes && styles.selectedReminderText
+                                        ]}>
+                                            {minutes < 60 ? `${minutes}m` : `${minutes / 60}h`}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={styles.sectionLabel}>Repeat</Text>
+                            <View style={styles.recurrenceContainer}>
+                                {(['none', 'daily', 'weekly', 'monthly'] as const).map(recurrence => (
+                                    <TouchableOpacity
+                                        key={recurrence}
+                                        style={[
+                                            styles.recurrenceButton,
+                                            newEvent.recurrence === recurrence && styles.selectedRecurrenceButton
+                                        ]}
+                                        onPress={() => setNewEvent({ ...newEvent, recurrence })}
+                                    >
+                                        <Text style={[
+                                            styles.recurrenceText,
+                                            newEvent.recurrence === recurrence && styles.selectedRecurrenceText
+                                        ]}>
+                                            {recurrence === 'none' ? 'Never' : recurrence.charAt(0).toUpperCase() + recurrence.slice(1)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
+
+                {/* Cross-platform time pickers in modal overlays */}
+                {showStartTimePicker && (
+                    <Modal
+                        transparent
+                        animationType="fade"
+                        visible={showStartTimePicker}
+                        onRequestClose={() => setShowStartTimePicker(false)}
+                    >
+                        <TouchableOpacity
+                            style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                            activeOpacity={1}
+                            onPressOut={() => setShowStartTimePicker(false)}
+                        >
+                            <View style={{ backgroundColor: '#222', margin: 32, borderRadius: 16, padding: 16 }}>
+                                <DateTimePicker
+                                    value={newEvent.startTime}
+                                    mode="time"
+                                    is24Hour={false}
+                                    display="spinner"
+                                    onChange={(event, selectedTime) => {
+                                        setShowStartTimePicker(false);
+                                        if (selectedTime) onTimeChange(event, selectedTime, true);
+                                    }}
+                                    style={{ backgroundColor: '#222' }}
+                                />
+                            </View>
+                        </TouchableOpacity>
+                    </Modal>
+                )}
+
+                {showEndTimePicker && (
+                    <Modal
+                        transparent
+                        animationType="fade"
+                        visible={showEndTimePicker}
+                        onRequestClose={() => setShowEndTimePicker(false)}
+                    >
+                        <TouchableOpacity
+                            style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                            activeOpacity={1}
+                            onPressOut={() => setShowEndTimePicker(false)}
+                        >
+                            <View style={{ backgroundColor: '#222', margin: 32, borderRadius: 16, padding: 16 }}>
+                                <DateTimePicker
+                                    value={newEvent.endTime}
+                                    mode="time"
+                                    is24Hour={false}
+                                    display="spinner"
+                                    onChange={(event, selectedTime) => {
+                                        setShowEndTimePicker(false);
+                                        if (selectedTime) onTimeChange(event, selectedTime, false);
+                                    }}
+                                    style={{ backgroundColor: '#222' }}
+                                />
+                            </View>
+                        </TouchableOpacity>
+                    </Modal>
+                )}
             </Modal>
+
+            {state.error && (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{state.error}</Text>
+                </View>
+            )}
         </SafeAreaView>
     );
 };
@@ -384,6 +696,35 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#121212',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#666',
+        marginTop: 16,
+        fontSize: 16,
+    },
+    header: {
+        padding: 24,
+        paddingBottom: 16,
+    },
+    headerTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginBottom: 4,
+        textShadowColor: '#1E90FF',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 14,
+        letterSpacing: 0.5,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '500',
     },
     calendar: {
         borderRadius: 12,
@@ -438,8 +779,10 @@ const styles = StyleSheet.create({
     weekDayContainer: {
         alignItems: 'center',
         paddingHorizontal: 15,
-        paddingVertical: 100, // Increased height
+        paddingVertical: 12,
         borderRadius: 8,
+        minHeight: 80,
+        justifyContent: 'center',
     },
     selectedDayContainer: {
         backgroundColor: '#1E90FF',
@@ -448,6 +791,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.7,
         shadowRadius: 10,
         elevation: 7,
+    },
+    todayContainer: {
+        backgroundColor: '#333',
+        borderWidth: 1,
+        borderColor: '#1E90FF',
     },
     weekDayText: {
         color: '#bbbbbb',
@@ -466,6 +814,8 @@ const styles = StyleSheet.create({
     dotRow: {
         flexDirection: 'row',
         marginTop: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     eventDotSmall: {
         width: 6,
@@ -473,12 +823,17 @@ const styles = StyleSheet.create({
         borderRadius: 3,
         marginHorizontal: 1,
     },
+    moreEventsIndicator: {
+        color: '#666',
+        fontSize: 10,
+        marginLeft: 2,
+    },
     threeDayScroll: {
         marginHorizontal: 16,
         marginVertical: 8,
     },
     threeDayContainer: {
-        width: '64%', // Stretch to full width
+        width: 120,
         backgroundColor: '#1a1a1a',
         borderRadius: 14,
         marginRight: 12,
@@ -518,7 +873,7 @@ const styles = StyleSheet.create({
     },
     moreEventsText: {
         color: '#999',
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
     eventsContainer: {
@@ -527,30 +882,35 @@ const styles = StyleSheet.create({
         paddingTop: 12,
     },
     eventsHeader: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#1E90FF',
         marginBottom: 12,
     },
-    noEventsText: {
-        fontSize: 16,
-        color: '#888',
-        fontStyle: 'italic',
-    },
     eventList: {
-        paddingBottom: 80, // space for FAB
+        paddingBottom: 32,
+    },
+    eventItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#232323',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 3,
     },
     colorDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: 10,
-        marginTop: 6,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        marginRight: 12,
     },
     eventTextContainer: {
         flex: 1,
-        flexDirection: 'column',
-        justifyContent: 'center',
     },
     eventTitle: {
         fontSize: 16,
@@ -559,18 +919,54 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     eventTime: {
-        fontSize: 14,
-        color: '#bbb',
+        fontSize: 13,
+        color: '#1E90FF',
+        fontWeight: '600',
         marginBottom: 2,
     },
     eventDescription: {
         fontSize: 13,
-        color: '#aaa',
-        fontStyle: 'italic',
+        color: '#bbb',
         marginBottom: 2,
     },
-    eventItem: {
-        flexDirection: 'row',
+    recurrenceText: {
+        fontSize: 12,
+        color: '#FFA500',
+        fontWeight: '600',
+    },
+    noEventsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 32,
+    },
+    noEventsText: {
+        fontSize: 18,
+        color: '#bbb',
+        marginTop: 8,
+        fontWeight: '600',
+    },
+    noEventsSubtext: {
+        fontSize: 14,
+        color: '#888',
+        marginTop: 2,
+    },
+    fab: {
+        position: 'absolute',
+        right: 24,
+        bottom: 32,
+        backgroundColor: '#1E90FF',
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#1E90FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.6,
+        shadowRadius: 8,
+        elevation: 10,
+        zIndex: 10,
+
     },
     modalContainer: {
         flex: 1,
@@ -579,82 +975,195 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalContent: {
-        backgroundColor: '#222',
+        backgroundColor: '#232323',
         borderRadius: 16,
         padding: 24,
-        width: '85%',
-        alignItems: 'stretch',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.7,
-        shadowRadius: 12,
-        elevation: 10,
+        width: '90%',
+        maxHeight: '90%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
     },
     modalTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#1E90FF',
-        marginBottom: 16,
+        color: '#fff',
         textAlign: 'center',
+        flex: 1,
     },
-    fab: {
-        position: 'absolute',
-        right: 24,
-        bottom: 32,
-        backgroundColor: '#1E90FF',
-        width: 64,           // Match HomeScreen
-        height: 64,          // Match HomeScreen
-        borderRadius: 32,    // Match HomeScreen
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#1E90FF',
-        shadowOffset: { width: 0, height: 6 }, // Match HomeScreen
-        shadowOpacity: 0.6,
-        shadowRadius: 8,
-        elevation: 10,
-        zIndex: 10,
-
+    modalCloseButton: {
+        padding: 8,
+        marginRight: 8,
+    },
+    modalSaveButton: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    modalSaveText: {
+        color: '#1E90FF',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    modalScrollView: {
+        marginTop: 8,
     },
     input: {
         backgroundColor: '#333',
         color: '#fff',
         borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 16,
-        marginBottom: 12,
+        padding: 10,
         borderWidth: 1,
         borderColor: '#444',
+        marginBottom: 16,
+        fontSize: 16,
     },
-    colorPickerContainer: {
+    textArea: {
+        height: 60,
+        textAlignVertical: 'top',
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    toggleLabel: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        marginRight: 12,
+    },
+    toggle: {
+        width: 40,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#444',
+        justifyContent: 'center',
+        padding: 2,
+    },
+    toggleActive: {
+        backgroundColor: '#1E90FF',
+    },
+    toggleThumb: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#bbb',
+        alignSelf: 'flex-start',
+    },
+    toggleThumbActive: {
+        backgroundColor: '#fff',
+        alignSelf: 'flex-end',
+    },
+    timeContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 16,
+    },
+    timeButton: {
+        flex: 1,
+        backgroundColor: '#333',
+        borderRadius: 8,
+        padding: 12,
+        marginHorizontal: 4,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#444',
+    },
+    timeLabel: {
+        color: '#bbb',
+        fontSize: 13,
+        marginBottom: 2,
+    },
+    timeValue: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    sectionLabel: {
+        color: '#bbb',
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 6,
+        marginTop: 8,
+    },
+    colorPickerContainer: {
+        flexDirection: 'row',
+        marginBottom: 16,
+        marginTop: 4,
     },
     colorPicker: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        marginHorizontal: 4,
+        marginRight: 12,
         borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    selectedColorPicker: {
         borderColor: '#fff',
     },
-    header: {
-        padding: 24,
-        paddingBottom: 16,
-        zIndex: 2,
+    reminderContainer: {
+        flexDirection: 'row',
+        marginBottom: 16,
+        marginTop: 4,
     },
-    headerTitle: {
-        fontSize: 32,
+    reminderButton: {
+        backgroundColor: '#333',
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#444',
+    },
+    selectedReminderButton: {
+        backgroundColor: '#1E90FF',
+        borderColor: '#1E90FF',
+    },
+    reminderText: {
+        color: '#bbb',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    selectedReminderText: {
+        color: '#fff',
+    },
+    recurrenceContainer: {
+        flexDirection: 'row',
+        marginBottom: 16,
+        marginTop: 4,
+    },
+    recurrenceButton: {
+        backgroundColor: '#333',
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#444',
+    },
+    selectedRecurrenceButton: {
+        backgroundColor: '#1E90FF',
+        borderColor: '#1E90FF',
+    },
+    selectedRecurrenceText: {
+        color: '#fff',
+    },
+    errorContainer: {
+        padding: 16,
+        backgroundColor: '#FF3B30',
+        borderRadius: 8,
+        margin: 16,
+    },
+    errorText: {
+        color: '#fff',
         fontWeight: 'bold',
-        color: colors.textPrimary,
-        marginBottom: 4,
-        textShadowColor: '#1E90FF',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 14,
-        letterSpacing: 0.5,
-
+        fontSize: 16,
+        textAlign: 'center',
     },
 });
 
-export default CalenderScreen;
+export default CalendarScreen;

@@ -7,7 +7,7 @@
  * Use this component to display a modal for creating or updating a task.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Modal,
     View,
@@ -23,6 +23,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { Task, createTask, updateTaskProgress } from '../utilities/taskHelpers';
 import { colors } from '../styles/colors';
+import { useEvents } from '../utilities/EventContext';
 
 interface TaskModalProps {
     visible: boolean;
@@ -43,8 +44,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
     const [description, setDescription] = useState('');
     const [type, setType] = useState<'unit' | 'daily' | 'clean'>('daily');
     const [targetValue, setTargetValue] = useState('');
-    const [currentValue, setCurrentValue] = useState('');
     const [completed, setCompleted] = useState(false);
+    const [unitMode, setUnitMode] = useState<'time' | 'custom'>('custom');
+    const [stopwatchRunning, setStopwatchRunning] = useState(false);
+    const [stopwatchTime, setStopwatchTime] = useState(0); // in seconds
+    const [minutesLogged, setMinutesLogged] = useState(0);
+    const [currentValue, setCurrentValue] = useState('');
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const lastMinuteRef = useRef(0);
 
     useEffect(() => {
         if (task) {
@@ -52,20 +59,64 @@ const TaskModal: React.FC<TaskModalProps> = ({
             setDescription(task.description || '');
             setType(task.type);
             setTargetValue(task.targetValue?.toString() || '');
-            setCurrentValue(task.currentValue?.toString() || '');
             setCompleted(!!task.completed);
+            setUnitMode('custom');
+            setStopwatchTime(0);
+            setStopwatchRunning(false);
+            setMinutesLogged(task.currentValue || 0);
+            setCurrentValue(task.currentValue?.toString() || '0');
+            lastMinuteRef.current = 0;
         } else {
             resetForm();
         }
     }, [task, visible]);
+
+    useEffect(() => {
+        if (stopwatchRunning) {
+            intervalRef.current = setInterval(() => {
+                setStopwatchTime((prev) => prev + 1);
+            }, 1000);
+        } else if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [stopwatchRunning]);
+
+    // Increment minutesLogged every time a new minute is crossed on the stopwatch
+    useEffect(() => {
+        if (unitMode === 'time' && stopwatchRunning) {
+            const minutes = Math.floor(stopwatchTime / 60);
+            if (minutes > lastMinuteRef.current) {
+                setMinutesLogged((prev) => {
+                    const max = parseInt(targetValue) || 100;
+                    return Math.min(prev + (minutes - lastMinuteRef.current), max);
+                });
+                lastMinuteRef.current = minutes;
+            }
+        }
+    }, [stopwatchTime, unitMode, stopwatchRunning, targetValue]);
+
+    // When switching to time mode or resetting, also reset lastMinuteRef
+    useEffect(() => {
+        if (!stopwatchRunning) {
+            lastMinuteRef.current = Math.floor(stopwatchTime / 60);
+        }
+    }, [unitMode, stopwatchRunning, stopwatchTime]);
 
     const resetForm = () => {
         setTitle('');
         setDescription('');
         setType('daily');
         setTargetValue('');
-        setCurrentValue('');
         setCompleted(false);
+        setUnitMode('custom');
+        setStopwatchTime(0);
+        setStopwatchRunning(false);
+        setMinutesLogged(0);
+        setCurrentValue('0');
+        lastMinuteRef.current = 0;
     };
 
     const handleSave = () => {
@@ -94,8 +145,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
             };
 
             // Update current value if it's a unit task
-            if (type === 'unit' && currentValue.trim()) {
-                savedTask = updateTaskProgress(savedTask, parseInt(currentValue) || 0);
+            if (type === 'unit') {
+                const progress = unitMode === 'time' ? minutesLogged : parseInt(currentValue) || 0;
+                savedTask = updateTaskProgress(savedTask, progress);
             }
         } else {
             // Create new task
@@ -106,8 +158,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 type === 'unit' ? parseInt(targetValue) || 1 : undefined
             );
             // Set initial progress if provided
-            if (type === 'unit' && currentValue.trim()) {
-                savedTask = updateTaskProgress(savedTask, parseInt(currentValue) || 0);
+            if (type === 'unit') {
+                const progress = unitMode === 'time' ? minutesLogged : parseInt(currentValue) || 0;
+                savedTask = updateTaskProgress(savedTask, progress);
             }
             if (type !== 'unit') {
                 savedTask.completed = completed;
@@ -145,7 +198,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
     // Helper for slider/input sync
     const maxTarget = parseInt(targetValue) || 100;
-    const currValueNum = parseInt(currentValue) || 0;
+
+    // Stopwatch display
+    const formatTime = (secs: number) => {
+        const m = Math.floor(secs / 60).toString().padStart(2, '0');
+        const s = (secs % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
 
     return (
         <Modal
@@ -227,20 +286,23 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         </Text>
                     </View>
 
-                    {/* Incomplete/complete toggle for daily/clean tasks */}
+                    {/* Incomplete/complete/relapse toggle for daily/clean tasks */}
                     {task && (type === 'daily' || type === 'clean') && (
-                        <View style={[styles.formGroup, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-                            <TouchableOpacity
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            style={[styles.formGroup, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}
+                            onPress={() => setCompleted(!completed)}
+                        >
+                            <View
                                 style={[
                                     styles.checkbox,
                                     !completed && styles.checkboxIncomplete
                                 ]}
-                                onPress={() => setCompleted(!completed)}
                             >
                                 {completed ? (
                                     <Text style={styles.checkboxText}>✓</Text>
                                 ) : null}
-                            </TouchableOpacity>
+                            </View>
                             <Text style={styles.label}>
                                 {type === 'clean'
                                     ? completed
@@ -250,51 +312,151 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                         ? 'Mark as Incomplete'
                                         : 'Mark as Complete'}
                             </Text>
-                        </View>
+                        </TouchableOpacity>
                     )}
 
                     {type === 'unit' && (
                         <>
+                            {/* Unit mode selector */}
+                            <View style={[styles.formGroup, { flexDirection: 'row', gap: 12 }]}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.unitModeButton,
+                                        unitMode === 'time' && styles.unitModeButtonActive,
+                                    ]}
+                                    onPress={() => setUnitMode('time')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.unitModeButtonText,
+                                            unitMode === 'time' && styles.unitModeButtonTextActive,
+                                        ]}
+                                    >
+                                        Time
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.unitModeButton,
+                                        unitMode === 'custom' && styles.unitModeButtonActive,
+                                    ]}
+                                    onPress={() => setUnitMode('custom')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.unitModeButtonText,
+                                            unitMode === 'custom' && styles.unitModeButtonTextActive,
+                                        ]}
+                                    >
+                                        Custom Units
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Target Value *</Text>
                                 <TextInput
                                     style={styles.input}
                                     value={targetValue}
                                     onChangeText={setTargetValue}
-                                    placeholder="Enter target value"
+                                    placeholder={unitMode === 'time' ? "Enter target minutes" : "Enter target value"}
                                     placeholderTextColor={colors.textMuted}
                                     keyboardType="numeric"
                                 />
                             </View>
 
+                            {/* Stopwatch for Time mode */}
+                            {unitMode === 'time' && (
+                                <View style={[styles.formGroup, { alignItems: 'center' }]}>
+                                    <Text
+                                        style={{
+                                            color: colors.primary,
+                                            fontSize: 64, // Bigger timer
+                                            fontWeight: 'bold',
+                                            marginBottom: 16,
+                                            letterSpacing: 2,
+                                        }}
+                                    >
+                                        {formatTime(stopwatchTime)}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 24 }}>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.stopwatchButton,
+                                                styles.stopwatchButtonLarge, // Larger button
+                                                stopwatchRunning && styles.stopwatchButtonActive,
+                                            ]}
+                                            onPress={() => setStopwatchRunning(!stopwatchRunning)}
+                                        >
+                                            <Text style={[
+                                                styles.stopwatchButtonText,
+                                                styles.stopwatchButtonTextLarge, // Larger text
+                                                stopwatchRunning && styles.stopwatchButtonTextActive
+                                            ]}>
+                                                {stopwatchRunning ? 'Pause' : 'Start'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.stopwatchButton, styles.stopwatchButtonLarge]}
+                                            onPress={() => {
+                                                setStopwatchRunning(false);
+                                                setStopwatchTime(0);
+                                                lastMinuteRef.current = 0;
+                                            }}
+                                        >
+                                            <Text style={[styles.stopwatchButtonText, styles.stopwatchButtonTextLarge]}>
+                                                Reset
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8 }}>
+                                        Every minute that passes adds 1 to Minutes Logged below.
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Progress slider and input */}
                             <View style={styles.formGroup}>
-                                <Text style={styles.label}>Current Progress</Text>
+                                <Text style={styles.label}>
+                                    {unitMode === 'time' ? 'Minutes Logged' : 'Current Progress'}
+                                </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                     <Slider
                                         style={{ flex: 1 }}
                                         minimumValue={0}
                                         maximumValue={maxTarget}
                                         step={1}
-                                        value={currValueNum}
+                                        value={unitMode === 'time' ? minutesLogged : parseInt(currentValue) || 0}
                                         minimumTrackTintColor={colors.primary}
                                         maximumTrackTintColor={colors.border}
                                         thumbTintColor={colors.primary}
-                                        onValueChange={val => setCurrentValue(val.toString())}
+                                        onValueChange={val => {
+                                            if (unitMode === 'time') {
+                                                setMinutesLogged(val);
+                                            } else {
+                                                setCurrentValue(val.toString());
+                                            }
+                                        }}
                                     />
                                     <TextInput
-                                        style={[styles.input, { width: 60, marginBottom: 0, textAlign: 'center' }]
-                                        }
-                                        value={currentValue}
+                                        style={[styles.input, { width: 60, marginBottom: 0, textAlign: 'center' }]}
+                                        value={unitMode === 'time' ? minutesLogged.toString() : currentValue}
                                         onChangeText={text => {
                                             let num = parseInt(text.replace(/[^0-9]/g, '')) || 0;
                                             if (num > maxTarget) num = maxTarget;
-                                            setCurrentValue(num.toString());
+                                            if (unitMode === 'time') {
+                                                setMinutesLogged(num);
+                                            } else {
+                                                setCurrentValue(num.toString());
+                                            }
                                         }}
                                         keyboardType="numeric"
                                     />
                                 </View>
                                 <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
-                                    {currentValue} / {targetValue || 1}
+                                    {unitMode === 'time'
+                                        ? `${minutesLogged} / ${targetValue || 1}`
+                                        : `${currentValue} / ${targetValue || 1}`}
                                 </Text>
                             </View>
                         </>
@@ -426,6 +588,58 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 18,
+    },
+    unitModeButton: {
+        flex: 1,
+        backgroundColor: colors.surface,
+        borderRadius: 8,
+        padding: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    unitModeButtonActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    unitModeButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    unitModeButtonTextActive: {
+        color: colors.textPrimary,
+    },
+    stopwatchButton: {
+        backgroundColor: colors.surface,
+        borderRadius: 8,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    stopwatchButtonActive: {
+        backgroundColor: colors.primary,
+    },
+    stopwatchButtonText: {
+        color: colors.primary,
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    stopwatchButtonTextActive: {
+        color: '#fff',
+    },
+    stopwatchButtonLarge: {
+        minWidth: 100,
+        minHeight: 48,
+        paddingHorizontal: 28,
+        paddingVertical: 16,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    stopwatchButtonTextLarge: {
+        fontSize: 22,
     },
 });
 

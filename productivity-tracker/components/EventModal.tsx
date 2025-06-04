@@ -6,12 +6,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     KeyboardAvoidingView,
-    Platform,
     ScrollView,
     TextInput,
+    Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors } from '../styles/colors'; // You must define your color palette here
+import { colors } from '../styles/colors';
 
 interface EventModalProps {
     visible: boolean;
@@ -90,7 +90,7 @@ const EventModal: React.FC<EventModalProps> = ({ visible, event, onSave, onCance
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
-            <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <KeyboardAvoidingView style={styles.overlay} behavior="padding">
                 <View style={styles.modal}>
                     <Text style={styles.headerTitle}>{event ? 'Edit Event' : 'New Event'}</Text>
                     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 30 }}>
@@ -114,16 +114,32 @@ const EventModal: React.FC<EventModalProps> = ({ visible, event, onSave, onCance
                                 </Text>
                             </TouchableOpacity>
                             {showStartTimePicker && (
-                                <DateTimePicker
-                                    value={startTime || new Date()}
-                                    mode="time"
-                                    is24Hour={false}
-                                    display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-                                    onChange={(_event, selectedDate) => {
-                                        setShowStartTimePicker(false);
-                                        if (selectedDate) setStartTime(selectedDate);
-                                    }}
-                                />
+                                <Modal
+                                    transparent
+                                    animationType="fade"
+                                    visible={showStartTimePicker}
+                                    onRequestClose={() => setShowStartTimePicker(false)}
+                                >
+                                    <TouchableOpacity
+                                        style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                                        activeOpacity={1}
+                                        onPressOut={() => setShowStartTimePicker(false)}
+                                    >
+                                        <View style={{ backgroundColor: '#222', margin: 32, borderRadius: 16, padding: 16 }}>
+                                            <DateTimePicker
+                                                value={startTime || new Date()}
+                                                mode="time"
+                                                is24Hour={false}
+                                                display="spinner"
+                                                onChange={(_event, selectedDate) => {
+                                                    setShowStartTimePicker(false);
+                                                    if (selectedDate) setStartTime(selectedDate);
+                                                }}
+                                                style={{ backgroundColor: '#222' }}
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                </Modal>
                             )}
                         </View>
 
@@ -135,16 +151,32 @@ const EventModal: React.FC<EventModalProps> = ({ visible, event, onSave, onCance
                                 </Text>
                             </TouchableOpacity>
                             {showEndTimePicker && (
-                                <DateTimePicker
-                                    value={endTime || new Date()}
-                                    mode="time"
-                                    is24Hour={false}
-                                    display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-                                    onChange={(_event, selectedDate) => {
-                                        setShowEndTimePicker(false);
-                                        if (selectedDate) setEndTime(selectedDate);
-                                    }}
-                                />
+                                <Modal
+                                    transparent
+                                    animationType="fade"
+                                    visible={showEndTimePicker}
+                                    onRequestClose={() => setShowEndTimePicker(false)}
+                                >
+                                    <TouchableOpacity
+                                        style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                                        activeOpacity={1}
+                                        onPressOut={() => setShowEndTimePicker(false)}
+                                    >
+                                        <View style={{ backgroundColor: '#222', margin: 32, borderRadius: 16, padding: 16 }}>
+                                            <DateTimePicker
+                                                value={endTime || new Date()}
+                                                mode="time"
+                                                is24Hour={false}
+                                                display="spinner"
+                                                onChange={(_event, selectedDate) => {
+                                                    setShowEndTimePicker(false);
+                                                    if (selectedDate) setEndTime(selectedDate);
+                                                }}
+                                                style={{ backgroundColor: '#222' }}
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                </Modal>
                             )}
                         </View>
 

@@ -15,6 +15,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 // Import your screens
 import HomeScreen from './screen/HomeScreen';
 import CalenderScreen from './screen/CalenderScreen'; // <-- Import your calendar screen
+import { EventProvider } from './utilities/EventContext';
+import ReportScreen from './screen/ReportScreen';
 
 // Placeholder screen for demonstration
 const Screen2 = () => <></>;
@@ -23,25 +25,27 @@ const Tab = createBottomTabNavigator();
 
 export default function App() {
     return (
-        <GestureHandlerRootView style={styles.container}>
-            <NavigationContainer>
-                <Tab.Navigator
-                    screenOptions={{
-                        headerShown: false,
-                        tabBarStyle: {
-                            backgroundColor: '#222',
-                        },
-                        tabBarActiveTintColor: '#fff',
-                        tabBarInactiveTintColor: '#888',
-                    }}
-                >
-                    <Tab.Screen name="Report" component={Screen2} />
-                    <Tab.Screen name="Tasks" component={HomeScreen} />
-                    <Tab.Screen name="Calendar" component={CalenderScreen} />
-                </Tab.Navigator>
-            </NavigationContainer>
-            <StatusBar style="light" />
-        </GestureHandlerRootView>
+        <EventProvider>
+            <GestureHandlerRootView style={styles.container}>
+                <NavigationContainer>
+                    <Tab.Navigator
+                        screenOptions={{
+                            headerShown: false,
+                            tabBarStyle: {
+                                backgroundColor: '#222',
+                            },
+                            tabBarActiveTintColor: '#fff',
+                            tabBarInactiveTintColor: '#888',
+                        }}
+                    >
+                        <Tab.Screen name="Report" component={ReportScreen} />
+                        <Tab.Screen name="Tasks" component={HomeScreen} />
+                        <Tab.Screen name="Calendar" component={CalenderScreen} />
+                    </Tab.Navigator>
+                </NavigationContainer>
+                <StatusBar style="light" />
+            </GestureHandlerRootView>
+        </EventProvider>
     );
 }
 

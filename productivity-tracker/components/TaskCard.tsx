@@ -88,10 +88,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onComplete }) => {
 
     return (
         <Swipeable
-            ref={swipeableRef} // 4. Attach the ref
-            renderLeftActions={completed ? undefined : renderRightAction}
-            onSwipeableLeftOpen={handleSwipeRight}
-            leftThreshold={0.5}
+            ref={swipeableRef}
+            renderRightActions={completed ? undefined : renderRightAction}
+            onSwipeableRightOpen={handleSwipeRight}
+            rightThreshold={0.5}
         >
             <TouchableOpacity
                 style={[taskStyles.taskCard, completed && taskStyles.taskCardCompleted]}
