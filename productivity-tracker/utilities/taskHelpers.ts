@@ -18,6 +18,7 @@ export interface Task {
     lastCompletedDate?: string;
     createdAt: string;
     updatedAt: string;
+    relapsedDate?: string; // For clean tasks: last date of relapse
 }
 
 /**
@@ -41,6 +42,7 @@ export const createTask = (
         streak: 0,
         createdAt: now,
         updatedAt: now,
+        relapsedDate: undefined,
     };
 };
 
@@ -73,8 +75,37 @@ export const shouldResetTask = (task: Task): boolean => {
 
 /**
  * Resets a task for a new day and updates the streak if completed yesterday.
+ * For "clean" tasks, increments streak if not relapsed today.
  */
 export const resetTaskForNewDay = (task: Task): Task => {
+    const now = new Date();
+    const todayStr = now.toDateString();
+
+    if (task.type === 'clean') {
+        // If relapsed today, reset streak to 0
+        if (task.relapsedDate === todayStr) {
+            return {
+                ...task,
+                completed: false,
+                streak: 0,
+                updatedAt: now.toISOString(),
+            };
+        } else if (task.updatedAt) {
+            // Only increment streak if last update was not today
+            const lastUpdate = new Date(task.updatedAt);
+            if (lastUpdate.toDateString() !== todayStr) {
+                return {
+                    ...task,
+                    completed: false,
+                    streak: task.streak + 1,
+                    updatedAt: now.toISOString(),
+                };
+            }
+        }
+        return task;
+    }
+
+    // For daily/unit tasks: increment streak if completed yesterday, else reset
     const wasCompletedYesterday = task.completed || isTaskCompleted(task);
 
     return {
@@ -82,7 +113,7 @@ export const resetTaskForNewDay = (task: Task): Task => {
         completed: false,
         currentValue: task.type === 'unit' ? 0 : undefined,
         streak: wasCompletedYesterday ? task.streak + 1 : 0,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now.toISOString(),
     };
 };
 
@@ -107,6 +138,21 @@ export const completeTask = (task: Task): Task => {
         completed: true,
         lastCompletedDate: now,
         updatedAt: now,
+    };
+};
+
+/**
+ * Marks a "clean" task as relapsed (resets streak and sets relapsedDate).
+ */
+export const relapseCleanTask = (task: Task): Task => {
+    if (task.type !== 'clean') return task;
+    const todayStr = new Date().toDateString();
+    return {
+        ...task,
+        completed: true,
+        streak: 0,
+        relapsedDate: todayStr,
+        updatedAt: new Date().toISOString(),
     };
 };
 
@@ -151,4 +197,11 @@ export const getStreakText = (task: Task): string => {
     if (task.type === 'unit') return '';
     if (task.streak === 0) return 'No streak yet';
     return `${task.streak} day${task.streak === 1 ? '' : 's'} streak`;
+};
+
+/**
+ * Utility to reset all tasks for a new day (should be called once per day).
+ */
+export const resetAllTasksForNewDay = (tasks: Task[]): Task[] => {
+    return tasks.map(resetTaskForNewDay);
 };
